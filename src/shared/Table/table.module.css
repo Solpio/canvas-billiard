@@ -1,0 +1,10 @@
+.wrapper {
+    padding: 30px;
+    box-sizing: border-box;
+    border-radius: 24px;
+    background-color: #222222;
+}
+
+.innerWrapper {
+    border: 1px solid #FFFFFF;
+}
