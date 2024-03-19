@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import Canvas from "shared/Canvas";
 
 const friction = 0.99;
@@ -68,14 +68,10 @@ const draw = (
 
 const Billiard: React.FC<BilliardProps> = ({ width, height }) => {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
-	const [cueStickStart, setCueStickStart] = useState<{
-		x: number;
-		y: number;
-	} | null>(null);
-	const [cueStickEnd, setCueStickEnd] = useState<{
-		x: number;
-		y: number;
-	} | null>(null);
+	const [cueStickPosition, setCueStickPosition] = useState<{
+		start: { x: number; y: number } | null;
+		end: { x: number; y: number } | null;
+	}>({ start: null, end: null });
 	const rafRef = useRef<number>(0);
 	const clickedIndex = useRef(-1);
 
@@ -103,21 +99,37 @@ const Billiard: React.FC<BilliardProps> = ({ width, height }) => {
 
 		if (!canvas || !ctx) return;
 		const animationLoop = () => {
-			draw(ctx, ballsRef.current, canvas, cueStickStart, cueStickEnd);
+			draw(
+				ctx,
+				ballsRef.current,
+				canvas,
+				cueStickPosition.start,
+				cueStickPosition.end
+			);
 			rafRef.current = requestAnimationFrame(animationLoop);
 		};
-		console.log(cueStickStart, cueStickEnd);
 		animationLoop();
 		return () => {
 			cancelAnimationFrame(rafRef.current);
 		};
-	}, [cueStickStart, cueStickEnd]);
+	}, [cueStickPosition]);
+
+	const handleMouseMove = useCallback((event: MouseEvent) => {
+		if (canvasRef.current) {
+			const rect = canvasRef.current.getBoundingClientRect();
+			const mouseX = event.clientX - rect.left;
+			const mouseY = event.clientY - rect.top;
+			setCueStickPosition((prev) => ({
+				...prev,
+				end: { x: mouseX, y: mouseY },
+			}));
+		}
+	}, []);
 
 	useEffect(() => {
 		const canvas = canvasRef.current;
-		const ctx = canvas?.getContext("2d");
+		if (!canvas) return;
 
-		if (!canvas || !ctx) return;
 		const handleMouseDown = (event: MouseEvent) => {
 			const rect = canvas.getBoundingClientRect();
 			const mouseX = event.clientX - rect.left;
@@ -132,41 +144,43 @@ const Billiard: React.FC<BilliardProps> = ({ width, height }) => {
 				clickedIndex.current = clickedBallIndex;
 				ballsRef.current[clickedBallIndex].vy = 0;
 				ballsRef.current[clickedBallIndex].vx = 0;
-				setCueStickStart({
-					x: ballsRef.current[clickedBallIndex].x,
-					y: ballsRef.current[clickedBallIndex].y,
+				setCueStickPosition({
+					start: {
+						x: ballsRef.current[clickedBallIndex].x,
+						y: ballsRef.current[clickedBallIndex].y,
+					},
+					end: null,
 				});
+				canvas.addEventListener("mousemove", handleMouseMove);
 			}
-			canvas.addEventListener("mousemove", handleMouseMove);
-		};
-
-		const handleMouseMove = (event: MouseEvent) => {
-			const rect = canvas.getBoundingClientRect();
-			const mouseX = event.clientX - rect.left;
-			const mouseY = event.clientY - rect.top;
-			setCueStickEnd({
-				x: mouseX,
-				y: mouseY,
-			});
 		};
 
 		const handleMouseUp = () => {
-			if (clickedIndex.current > -1) {
+			if (
+				clickedIndex.current > -1 &&
+				cueStickPosition.start &&
+				cueStickPosition.end
+			) {
+				const dx = cueStickPosition.start.x - cueStickPosition.end.x;
+				const dy = cueStickPosition.start.y - cueStickPosition.end.y;
+				const force = 0.1; // Adjust as needed
+				const velocityX = dx * force;
+				const velocityY = dy * force;
+				ballsRef.current[clickedIndex.current].vx = velocityX;
+				ballsRef.current[clickedIndex.current].vy = velocityY;
 				clickedIndex.current = -1;
-				setCueStickStart(null);
-				setCueStickEnd(null);
+				setCueStickPosition({ start: null, end: null });
+				canvas.removeEventListener("mousemove", handleMouseMove);
 			}
-			canvas.removeEventListener("mousemove", handleMouseMove);
 		};
 		canvas.addEventListener("mouseup", handleMouseUp);
 		canvas.addEventListener("mousedown", handleMouseDown);
 		return () => {
 			canvas.removeEventListener("mouseup", handleMouseUp);
-			canvas.removeEventListener("mousemove", handleMouseMove);
 			canvas.removeEventListener("mousedown", handleMouseDown);
 			cancelAnimationFrame(rafRef.current);
 		};
-	}, []);
+	}, [cueStickPosition]);
 
 	return <Canvas ref={canvasRef} width={width} height={height} />;
 };
