@@ -46,7 +46,7 @@ const draw = (
 	ctx.strokeStyle = "white";
 	ctx.stroke();
 
-	balls.forEach((ball) => {
+	balls.forEach((ball, index) => {
 		ball.vx *= friction;
 		ball.vy *= friction;
 
@@ -55,6 +55,34 @@ const draw = (
 
 		borderCollision(ball, canvas);
 		ball.draw(ctx);
+		for (let i = index + 1; i < balls.length; i++) {
+			const otherBall = balls[i];
+			const dx = otherBall.x - ball.x;
+			const dy = otherBall.y - ball.y;
+			const distance = Math.sqrt(dx * dx + dy * dy);
+			const minDistance = ball.radius + otherBall.radius;
+
+			if (distance < minDistance) {
+				// Calculate normal vectors
+				const normalX = dx / distance;
+				const normalY = dy / distance;
+
+				// Calculate relative velocity
+				const relativeVelocityX = otherBall.vx - ball.vx;
+				const relativeVelocityY = otherBall.vy - ball.vy;
+
+				// Calculate impulse along the normal
+				const dotProduct =
+					relativeVelocityX * normalX + relativeVelocityY * normalY;
+				const impulse = (2 * dotProduct) / (ball.radius + otherBall.radius);
+
+				// Update velocities
+				ball.vx += impulse * normalX;
+				ball.vy += impulse * normalY;
+				otherBall.vx -= impulse * normalX;
+				otherBall.vy -= impulse * normalY;
+			}
+		}
 	});
 
 	if (cueStickStart && cueStickEnd) {
@@ -78,6 +106,66 @@ const Billiard: React.FC<BilliardProps> = ({ width, height }) => {
 	const ballsRef = useRef<Ball[]>([
 		{
 			x: 200,
+			y: 200,
+			vx: 0,
+			vy: 0,
+			radius: 25,
+			color: "blue",
+			draw: function (ctx: CanvasRenderingContext2D) {
+				ctx.beginPath();
+				ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
+				ctx.closePath();
+				ctx.fillStyle = this.color;
+				ctx.fill();
+			},
+		},
+		{
+			x: 300,
+			y: 200,
+			vx: 0,
+			vy: 0,
+			radius: 25,
+			color: "blue",
+			draw: function (ctx: CanvasRenderingContext2D) {
+				ctx.beginPath();
+				ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
+				ctx.closePath();
+				ctx.fillStyle = this.color;
+				ctx.fill();
+			},
+		},
+		{
+			x: 400,
+			y: 200,
+			vx: 0,
+			vy: 0,
+			radius: 25,
+			color: "blue",
+			draw: function (ctx: CanvasRenderingContext2D) {
+				ctx.beginPath();
+				ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
+				ctx.closePath();
+				ctx.fillStyle = this.color;
+				ctx.fill();
+			},
+		},
+		{
+			x: 500,
+			y: 200,
+			vx: 0,
+			vy: 0,
+			radius: 25,
+			color: "blue",
+			draw: function (ctx: CanvasRenderingContext2D) {
+				ctx.beginPath();
+				ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
+				ctx.closePath();
+				ctx.fillStyle = this.color;
+				ctx.fill();
+			},
+		},
+		{
+			x: 600,
 			y: 200,
 			vx: 0,
 			vy: 0,
@@ -140,6 +228,7 @@ const Billiard: React.FC<BilliardProps> = ({ width, height }) => {
 				const dy = ball.y - mouseY;
 				return Math.sqrt(dx * dx + dy * dy) <= ball.radius;
 			});
+
 			if (clickedBallIndex !== -1) {
 				clickedIndex.current = clickedBallIndex;
 				ballsRef.current[clickedBallIndex].vy = 0;
