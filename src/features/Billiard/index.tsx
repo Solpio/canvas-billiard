@@ -46,7 +46,7 @@ const draw = (
 	ctx.strokeStyle = "white";
 	ctx.stroke();
 
-	balls.forEach((ball, index) => {
+	balls.forEach((ball) => {
 		ball.vx *= friction;
 		ball.vy *= friction;
 
@@ -55,35 +55,44 @@ const draw = (
 
 		borderCollision(ball, canvas);
 		ball.draw(ctx);
-		for (let i = index + 1; i < balls.length; i++) {
-			const otherBall = balls[i];
-			const dx = otherBall.x - ball.x;
-			const dy = otherBall.y - ball.y;
+	});
+
+	for (let i = 0; i < balls.length; i++) {
+		for (let j = i + 1; j < balls.length; j++) {
+			const dx = balls[i].x - balls[j].x;
+			const dy = balls[i].y - balls[j].y;
 			const distance = Math.sqrt(dx * dx + dy * dy);
-			const minDistance = ball.radius + otherBall.radius;
 
-			if (distance < minDistance) {
-				// Calculate normal vectors
-				const normalX = dx / distance;
-				const normalY = dy / distance;
+			if (distance < balls[i].radius + balls[j].radius) {
+				// Collision detected
+				const angle = Math.atan2(dy, dx);
+				const sin = Math.sin(angle);
+				const cos = Math.cos(angle);
 
-				// Calculate relative velocity
-				const relativeVelocityX = otherBall.vx - ball.vx;
-				const relativeVelocityY = otherBall.vy - ball.vy;
+				// Rotate ball1's velocity
+				const vx1 = balls[i].vx * cos + balls[i].vy * sin;
+				const vy1 = balls[i].vy * cos - balls[i].vx * sin;
 
-				// Calculate impulse along the normal
-				const dotProduct =
-					relativeVelocityX * normalX + relativeVelocityY * normalY;
-				const impulse = (2 * dotProduct) / (ball.radius + otherBall.radius);
+				// Rotate ball2's velocity
+				const vx2 = balls[j].vx * cos + balls[j].vy * sin;
+				const vy2 = balls[j].vy * cos - balls[j].vx * sin;
 
-				// Update velocities
-				ball.vx += impulse * normalX;
-				ball.vy += impulse * normalY;
-				otherBall.vx -= impulse * normalX;
-				otherBall.vy -= impulse * normalY;
+				// Swap velocities
+				const vxTotal = vx1 - vx2;
+				balls[i].vx =
+					((balls[i].radius - balls[j].radius) * vx1 +
+						2 * balls[j].radius * vx2) /
+					(balls[i].radius + balls[j].radius);
+				balls[j].vx = vxTotal + balls[i].vx;
+
+				// Rotate velocities back
+				balls[i].vx = balls[i].vx * cos - balls[i].vy * sin;
+				balls[i].vy = vy1 * cos + vx1 * sin;
+				balls[j].vx = balls[j].vx * cos - balls[j].vy * sin;
+				balls[j].vy = vy2 * cos + vx2 * sin;
 			}
 		}
-	});
+	}
 
 	if (cueStickStart && cueStickEnd) {
 		ctx.beginPath();
