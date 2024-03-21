@@ -1,36 +1,15 @@
-import React, { useRef, useEffect, useState, useCallback } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import Canvas from "shared/Canvas";
+import { Ball } from "features/types/ball.interface";
+import { calculateBilliardPositions } from "features/helpers/calculateBillardPositions";
+import { borderCollision } from "features/helpers/borderCollision";
 
 const friction = 0.99;
-interface Ball {
-	x: number;
-	y: number;
-	vx: number;
-	vy: number;
-	radius: number;
-	color: string;
-	draw: (ctx: CanvasRenderingContext2D) => void;
-}
 
 interface BilliardProps {
 	width: number;
 	height: number;
 }
-
-const borderCollision = (ball: Ball, canvas: HTMLCanvasElement) => {
-	if (
-		ball.y + ball.radius + ball.vy > canvas.height ||
-		ball.y - ball.radius + ball.vy < 0
-	) {
-		ball.vy = -ball.vy;
-	}
-	if (
-		ball.x + ball.radius + ball.vx > canvas.width ||
-		ball.x - ball.radius + ball.vx < 0
-	) {
-		ball.vx = -ball.vx;
-	}
-};
 
 const draw = (
 	ctx: CanvasRenderingContext2D | null,
@@ -46,53 +25,70 @@ const draw = (
 	ctx.strokeStyle = "white";
 	ctx.stroke();
 
-	balls.forEach((ball) => {
+	balls.forEach((ball, index) => {
 		ball.vx *= friction;
 		ball.vy *= friction;
 
 		ball.x += ball.vx;
 		ball.y += ball.vy;
-
 		borderCollision(ball, canvas);
-		ball.draw(ctx);
-	});
-
-	for (let i = 0; i < balls.length; i++) {
-		for (let j = i + 1; j < balls.length; j++) {
-			const dx = balls[i].x - balls[j].x;
-			const dy = balls[i].y - balls[j].y;
+		for (let j = 0; j < balls.length; j++) {
+			const dx = balls[index].x - balls[j].x;
+			const dy = balls[index].y - balls[j].y;
 			const distance = Math.sqrt(dx * dx + dy * dy);
 
-			if (distance < balls[i].radius + balls[j].radius) {
-				// Collision detected
-				const angle = Math.atan2(dy, dx);
-				const sin = Math.sin(angle);
-				const cos = Math.cos(angle);
+			if (index !== j && distance < balls[index].radius + balls[j].radius) {
+				const ball1 = ball;
+				const ball2 = balls[j];
+				const dx = ball2.x - ball1.x;
+				const dy = ball2.y - ball1.y;
+				const distance = Math.sqrt(dx * dx + dy * dy);
 
-				// Rotate ball1's velocity
-				const vx1 = balls[i].vx * cos + balls[i].vy * sin;
-				const vy1 = balls[i].vy * cos - balls[i].vx * sin;
+				// Check if balls are colliding
+				if (distance < ball1.radius + ball2.radius) {
+					// Calculate collision normal
+					const nx = dx / distance;
+					const ny = dy / distance;
 
-				// Rotate ball2's velocity
-				const vx2 = balls[j].vx * cos + balls[j].vy * sin;
-				const vy2 = balls[j].vy * cos - balls[j].vx * sin;
+					// Calculate relative velocity
+					const dvx = ball2.vx - ball1.vx;
+					const dvy = ball2.vy - ball1.vy;
+					const dotProduct = nx * dvx + ny * dvy;
 
-				// Swap velocities
-				const vxTotal = vx1 - vx2;
-				balls[i].vx =
-					((balls[i].radius - balls[j].radius) * vx1 +
-						2 * balls[j].radius * vx2) /
-					(balls[i].radius + balls[j].radius);
-				balls[j].vx = vxTotal + balls[i].vx;
+					// Apply impulse
+					const impulse =
+						(2 * dotProduct) / (1 / ball1.radius + 1 / ball2.radius);
+					ball1.vx += (impulse * nx) / ball1.radius;
+					ball1.vy += (impulse * ny) / ball1.radius;
+					ball2.vx -= (impulse * nx) / ball2.radius;
+					ball2.vy -= (impulse * ny) / ball2.radius;
 
-				// Rotate velocities back
-				balls[i].vx = balls[i].vx * cos - balls[i].vy * sin;
-				balls[i].vy = vy1 * cos + vx1 * sin;
-				balls[j].vx = balls[j].vx * cos - balls[j].vy * sin;
-				balls[j].vy = vy2 * cos + vx2 * sin;
+					// Separate balls to prevent overlap
+					const overlap = (ball1.radius + ball2.radius - distance) / 2;
+					const sepX = overlap * nx;
+					const sepY = overlap * ny;
+
+					ball1.x -= sepX;
+					ball1.y -= sepY;
+					ball2.x += sepX;
+					ball2.y += sepY;
+
+					// Ensure balls are not overlapping
+					while (
+						Math.sqrt((ball2.x - ball1.x) ** 2 + (ball2.y - ball1.y) ** 2) <
+						ball1.radius + ball2.radius
+					) {
+						ball1.x -= sepX / 10;
+						ball1.y -= sepY / 10;
+						ball2.x += sepX / 10;
+						ball2.y += sepY / 10;
+					}
+				}
 			}
 		}
-	}
+
+		ball.draw(ctx);
+	});
 
 	if (cueStickStart && cueStickEnd) {
 		ctx.beginPath();
@@ -119,7 +115,7 @@ const Billiard: React.FC<BilliardProps> = ({ width, height }) => {
 			vx: 0,
 			vy: 0,
 			radius: 25,
-			color: "blue",
+			color: "white",
 			draw: function (ctx: CanvasRenderingContext2D) {
 				ctx.beginPath();
 				ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
@@ -128,66 +124,7 @@ const Billiard: React.FC<BilliardProps> = ({ width, height }) => {
 				ctx.fill();
 			},
 		},
-		{
-			x: 300,
-			y: 200,
-			vx: 0,
-			vy: 0,
-			radius: 25,
-			color: "blue",
-			draw: function (ctx: CanvasRenderingContext2D) {
-				ctx.beginPath();
-				ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
-				ctx.closePath();
-				ctx.fillStyle = this.color;
-				ctx.fill();
-			},
-		},
-		{
-			x: 400,
-			y: 200,
-			vx: 0,
-			vy: 0,
-			radius: 25,
-			color: "blue",
-			draw: function (ctx: CanvasRenderingContext2D) {
-				ctx.beginPath();
-				ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
-				ctx.closePath();
-				ctx.fillStyle = this.color;
-				ctx.fill();
-			},
-		},
-		{
-			x: 500,
-			y: 200,
-			vx: 0,
-			vy: 0,
-			radius: 25,
-			color: "blue",
-			draw: function (ctx: CanvasRenderingContext2D) {
-				ctx.beginPath();
-				ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
-				ctx.closePath();
-				ctx.fillStyle = this.color;
-				ctx.fill();
-			},
-		},
-		{
-			x: 600,
-			y: 200,
-			vx: 0,
-			vy: 0,
-			radius: 25,
-			color: "blue",
-			draw: function (ctx: CanvasRenderingContext2D) {
-				ctx.beginPath();
-				ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, true);
-				ctx.closePath();
-				ctx.fillStyle = this.color;
-				ctx.fill();
-			},
-		},
+		...calculateBilliardPositions(5, 50, 600, 150),
 	]);
 
 	useEffect(() => {
@@ -209,9 +146,9 @@ const Billiard: React.FC<BilliardProps> = ({ width, height }) => {
 		return () => {
 			cancelAnimationFrame(rafRef.current);
 		};
-	}, [cueStickPosition]);
+	}, [cueStickPosition.end, cueStickPosition.start]);
 
-	const handleMouseMove = useCallback((event: MouseEvent) => {
+	const handleMouseMove = (event: MouseEvent) => {
 		if (canvasRef.current) {
 			const rect = canvasRef.current.getBoundingClientRect();
 			const mouseX = event.clientX - rect.left;
@@ -221,14 +158,11 @@ const Billiard: React.FC<BilliardProps> = ({ width, height }) => {
 				end: { x: mouseX, y: mouseY },
 			}));
 		}
-	}, []);
+	};
 
-	useEffect(() => {
-		const canvas = canvasRef.current;
-		if (!canvas) return;
-
-		const handleMouseDown = (event: MouseEvent) => {
-			const rect = canvas.getBoundingClientRect();
+	const handleMouseDown = (event: MouseEvent) => {
+		if (canvasRef.current) {
+			const rect = canvasRef.current.getBoundingClientRect();
 			const mouseX = event.clientX - rect.left;
 			const mouseY = event.clientY - rect.top;
 
@@ -249,38 +183,42 @@ const Billiard: React.FC<BilliardProps> = ({ width, height }) => {
 					},
 					end: null,
 				});
-				canvas.addEventListener("mousemove", handleMouseMove);
 			}
-		};
+		}
+	};
 
-		const handleMouseUp = () => {
-			if (
-				clickedIndex.current > -1 &&
-				cueStickPosition.start &&
-				cueStickPosition.end
-			) {
-				const dx = cueStickPosition.start.x - cueStickPosition.end.x;
-				const dy = cueStickPosition.start.y - cueStickPosition.end.y;
-				const force = 0.1; // Adjust as needed
-				const velocityX = dx * force;
-				const velocityY = dy * force;
-				ballsRef.current[clickedIndex.current].vx = velocityX;
-				ballsRef.current[clickedIndex.current].vy = velocityY;
-				clickedIndex.current = -1;
-				setCueStickPosition({ start: null, end: null });
-				canvas.removeEventListener("mousemove", handleMouseMove);
+	const handleMouseUp = () => {
+		if (
+			clickedIndex.current > -1 &&
+			cueStickPosition.start &&
+			cueStickPosition.end
+		) {
+			const dx = cueStickPosition.start.x - cueStickPosition.end.x;
+			const dy = cueStickPosition.start.y - cueStickPosition.end.y;
+			const force = 0.1; // Adjust as needed
+			const velocityX = dx * force;
+			const velocityY = dy * force;
+			ballsRef.current[clickedIndex.current].vx = velocityX;
+			ballsRef.current[clickedIndex.current].vy = velocityY;
+			clickedIndex.current = -1;
+			setCueStickPosition({ start: null, end: null });
+		}
+	};
+
+	return (
+		<Canvas
+			ref={canvasRef}
+			width={width}
+			height={height}
+			onMouseMove={
+				cueStickPosition.start?.x && cueStickPosition.start.y
+					? handleMouseMove
+					: undefined
 			}
-		};
-		canvas.addEventListener("mouseup", handleMouseUp);
-		canvas.addEventListener("mousedown", handleMouseDown);
-		return () => {
-			canvas.removeEventListener("mouseup", handleMouseUp);
-			canvas.removeEventListener("mousedown", handleMouseDown);
-			cancelAnimationFrame(rafRef.current);
-		};
-	}, [cueStickPosition]);
-
-	return <Canvas ref={canvasRef} width={width} height={height} />;
+			onMouseDown={handleMouseDown}
+			onMouseUp={handleMouseUp}
+		/>
+	);
 };
 
 export default Billiard;
